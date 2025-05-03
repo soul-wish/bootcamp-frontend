@@ -23,6 +23,7 @@ import { Loader2, ArrowDownUp } from "lucide-react";
 import { toast } from "sonner";
 import { EscrowProgram } from "@/solana-service/program";
 import { clusterApiUrl, Connection, PublicKey } from "@solana/web3.js";
+import { TOKEN_PROGRAM_ID, TOKEN_2022_PROGRAM_ID } from "@solana/spl-token";
 import { WalletAdapterNetwork } from "@solana/wallet-adapter-base";
 import { useAnchorWallet, useWallet } from "@solana/wallet-adapter-react";
 
@@ -71,16 +72,52 @@ export function CreateOfferDialog({
 
     try {
       const connection = new Connection(
-        clusterApiUrl(WalletAdapterNetwork.Devnet)
+        clusterApiUrl(WalletAdapterNetwork.Devnet),
       );
       if (!wallet) return;
+
+      const mintAInfo = await connection.getParsedAccountInfo(
+        new PublicKey(formData.tokenA),
+      );
+      const mintBInfo = await connection.getParsedAccountInfo(
+        new PublicKey(formData.tokenB),
+      );
+
+      const ownerA = (mintAInfo.value?.owner as PublicKey)?.toString();
+      const ownerB = (mintBInfo.value?.owner as PublicKey)?.toString();
+
+      if (!ownerA || !ownerB) {
+        toast("Could not fetch token mint info");
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (ownerA !== ownerB) {
+        toast(
+          "Both tokens must use the same token standard (SPL or Token-2022)",
+        );
+        setIsSubmitting(false);
+        return;
+      }
+
+      let tokenProgram: PublicKey;
+      if (ownerA === TOKEN_PROGRAM_ID.toString()) {
+        tokenProgram = TOKEN_PROGRAM_ID;
+      } else if (ownerA === TOKEN_2022_PROGRAM_ID.toString()) {
+        tokenProgram = TOKEN_2022_PROGRAM_ID;
+      } else {
+        toast("Unsupported token program for selected mints");
+        setIsSubmitting(false);
+        return;
+      }
 
       const contract = new EscrowProgram(connection, wallet as Wallet);
       const response = await contract.makeOffer(
         new PublicKey(formData.tokenA),
         new PublicKey(formData.tokenB),
         Number(formData.amountA),
-        Number(formData.amountB)
+        Number(formData.amountB),
+        tokenProgram,
       );
       if (!response) {
         toast("Error creating Offer");

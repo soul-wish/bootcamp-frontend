@@ -4,14 +4,13 @@ import { PublicKey } from "@solana/web3.js";
 import {
   getAssociatedTokenAddressSync,
   TOKEN_PROGRAM_ID,
+  TOKEN_2022_PROGRAM_ID,
 } from "@solana/spl-token";
 
 import escrowIdl from "./escrow.json";
 import { Escrow } from "./idlType";
 import { config } from "./config";
 import { randomBytes } from "crypto";
-
-const TOKEN_PROGRAM = TOKEN_PROGRAM_ID;
 
 export class EscrowProgram {
   protected program: Program<Escrow>;
@@ -43,7 +42,17 @@ export class EscrowProgram {
     tokenMintB: PublicKey,
     tokenAmountA: number,
     tokenAmountB: number,
+    tokenProgram: PublicKey = TOKEN_PROGRAM_ID,
   ) {
+    if (
+      !tokenProgram.equals(TOKEN_PROGRAM_ID) &&
+      !tokenProgram.equals(TOKEN_2022_PROGRAM_ID)
+    ) {
+      throw new Error(
+        "tokenProgram must be TOKEN_PROGRAM_ID or TOKEN_2022_PROGRAM_ID",
+      );
+    }
+
     const offerId = new BN(randomBytes(8));
     const offerAddress = this.createOfferId(offerId);
 
@@ -51,21 +60,21 @@ export class EscrowProgram {
       tokenMintA,
       offerAddress,
       true,
-      TOKEN_PROGRAM,
+      tokenProgram,
     );
 
     const makerTokenAccountA = getAssociatedTokenAddressSync(
       tokenMintA,
       this.wallet.publicKey,
       true,
-      TOKEN_PROGRAM,
+      tokenProgram,
     );
 
     const makerTokenAccountB = getAssociatedTokenAddressSync(
       tokenMintB,
       this.wallet.publicKey,
       true,
-      TOKEN_PROGRAM,
+      tokenProgram,
     );
 
     const accounts = {
@@ -80,7 +89,7 @@ export class EscrowProgram {
 
     const txInstruction = await this.program.methods
       .makeOffer(offerId, new BN(tokenAmountA), new BN(tokenAmountB))
-      .accounts({ ...accounts, tokenProgram: TOKEN_PROGRAM })
+      .accounts({ ...accounts, tokenProgram })
       .instruction();
 
     const messageV0 = new web3.TransactionMessage({
@@ -106,33 +115,43 @@ export class EscrowProgram {
     offer: PublicKey,
     tokenMintA: PublicKey,
     tokenMintB: PublicKey,
+    tokenProgram: PublicKey = TOKEN_PROGRAM_ID,
   ) {
+    if (
+      !tokenProgram.equals(TOKEN_PROGRAM_ID) &&
+      !tokenProgram.equals(TOKEN_2022_PROGRAM_ID)
+    ) {
+      throw new Error(
+        "tokenProgram must be TOKEN_PROGRAM_ID or TOKEN_2022_PROGRAM_ID",
+      );
+    }
+
     const takerTokenAccountA = getAssociatedTokenAddressSync(
       tokenMintA,
       this.wallet.publicKey,
       true,
-      TOKEN_PROGRAM,
+      tokenProgram,
     );
 
     const takerTokenAccountB = getAssociatedTokenAddressSync(
       tokenMintB,
       this.wallet.publicKey,
       true,
-      TOKEN_PROGRAM,
+      tokenProgram,
     );
 
     const makerTokenAccountB = getAssociatedTokenAddressSync(
       tokenMintB,
       maker,
       true,
-      TOKEN_PROGRAM,
+      tokenProgram,
     );
 
     const vault = getAssociatedTokenAddressSync(
       tokenMintA,
       offer,
       true,
-      TOKEN_PROGRAM,
+      tokenProgram,
     );
 
     const account = {
@@ -143,7 +162,7 @@ export class EscrowProgram {
       takerTokenAccountB,
       vault,
       makerTokenAccountB,
-      tokenProgram: TOKEN_PROGRAM,
+      tokenProgram,
     };
 
     const txInstruction = await this.program.methods
